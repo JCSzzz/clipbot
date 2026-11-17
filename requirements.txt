@@ -1,0 +1,8 @@
+yt-dlp[default]
+anthropic
+edge-tts
+pyyaml
+google-api-python-client
+google-auth
+google-auth-oauthlib
+
