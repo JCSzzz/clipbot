@@ -3,7 +3,7 @@
 
 Roda uma vez por execução do workflow:
   1. escolhe um tema (rodízio) e busca um vídeo novo no YouTube (ou usa o link informado)
-  2. pega as legendas do vídeo e pede ao Claude os melhores trechos de 2~3 min
+  2. pega as legendas do vídeo e pede à Groq os melhores trechos de 2~3 min
   3. baixa só esses trechos, escreve a narração, gera a voz e edita em vertical
   4. envia para o YouTube já agendado (ou privado, no modo teste)
 """
@@ -31,7 +31,7 @@ MODE = SET.get("modo", "teste")  # teste = privado, sem agendar | producao = age
 TIMES = SET.get("horarios", ["12:00", "18:00", "21:00"])
 TZ = dt.timezone(dt.timedelta(hours=SET.get("fuso_horas", -3)))
 VOICE = SET.get("voz", "pt-BR-AntonioNeural")
-LLM_MODEL = SET.get("modelo_llm", "claude-sonnet-5-5")
+LLM_MODEL = SET.get("modelo_llm", "auto")
 WORDS_PER_SEC = 2.6
 MIN_DUR, MAX_DUR = 90, 200
 ISO = "%Y-%m-%dT%H:%M:%SZ"
@@ -49,12 +49,63 @@ def duration(path):
     return float(out)
 
 
+_GROQ_CLIENT = None
+_GROQ_MODEL = None
+
+
+def groq_model():
+    """Seleciona um modelo de chat ativo e acessível pela chave cadastrada."""
+    global _GROQ_CLIENT, _GROQ_MODEL
+    if _GROQ_MODEL:
+        return _GROQ_CLIENT, _GROQ_MODEL
+
+    from groq import Groq
+    api_key = os.getenv("GROQ_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError("GROQ_API_KEY não configurada nos Secrets do GitHub.")
+
+    _GROQ_CLIENT = Groq(api_key=api_key)
+    available = {
+        model.id for model in _GROQ_CLIENT.models.list().data
+        if getattr(model, "active", True)
+    }
+    preferred = ([LLM_MODEL] if LLM_MODEL and LLM_MODEL.lower() != "auto" else []) + [
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b",
+        "qwen/qwen3.8-27b",
+    ]
+    for model_id in preferred:
+        if model_id in available:
+            _GROQ_MODEL = model_id
+            print(f"Modelo Groq selecionado: {_GROQ_MODEL}")
+            return _GROQ_CLIENT, _GROQ_MODEL
+
+    excluded = ("whisper", "guard", "embed", "speech", "transcribe", "tts", "audio")
+    candidates = sorted(
+        model_id for model_id in available
+        if not any(term in model_id.lower() for term in excluded)
+    )
+    if not candidates:
+        raise RuntimeError("A chave Groq não possui um modelo de chat ativo disponível.")
+    _GROQ_MODEL = candidates[0]
+    print(f"Modelo Groq selecionado automaticamente: {_GROQ_MODEL}")
+    return _GROQ_CLIENT, _GROQ_MODEL
+
+
 def llm(system, prompt, max_tokens=4000):
-    import anthropic
-    r = anthropic.Anthropic().messages.create(
-        model=LLM_MODEL, max_tokens=max_tokens, system=system,
-        messages=[{"role": "user", "content": prompt}])
-    return r.content[0].text.strip()
+    client, model = groq_model()
+    response = client.chat.completions.create(
+        model=model,
+        max_tokens=max_tokens,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": prompt},
+        ],
+    )
+    content = response.choices[0].message.content
+    if not content:
+        raise RuntimeError(f"A Groq retornou uma resposta vazia (modelo {model}).")
+    return content.strip()
 
 
 def load_state():
