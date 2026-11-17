@@ -1,0 +1,8 @@
+cookies.txt
+client_secret.json
+token.json
+.env
+work/
+out/
+__pycache__/
+
