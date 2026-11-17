@@ -1,0 +1,25 @@
+# ==== ClipBot: edite este arquivo (pelo celular também, em github.com) ====
+config:
+  modo: teste            # teste = sobe PRIVADO, sem agendar | producao = agenda e publica nos horários
+  horarios: ["12:00", "18:00", "21:00"]   # horários de publicação (no fuso abaixo)
+  fuso_horas: -3         # Brasília = -3
+  voz: pt-BR-AntonioNeural
+  modelo_llm: claude-sonnet-5-5
+
+temas:
+  - nome: Ciência
+    busca: entrevista física quântica       # o que será buscado no YouTube
+    idioma: pt                              # idioma falado nos vídeos (pt, en, es)
+    duracao: long                           # long = mais de 20 min | medium = de 4 a 20 min
+    so_creative_commons: true               # recomendado: só vídeos com licença Creative Commons
+    cortes: 3                               # cortes gerados por vídeo
+    ativo: true
+
+  - nome: Tecnologia
+    busca: podcast inteligência artificial
+    idioma: pt
+    duracao: long
+    so_creative_commons: true
+    cortes: 3
+    ativo: false                            # false = pausado
+
