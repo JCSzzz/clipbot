@@ -4,7 +4,7 @@ config:
   horarios: ["12:00", "18:00", "21:00"]   # horários de publicação (no fuso abaixo)
   fuso_horas: -3         # Brasília = -3
   voz: pt-BR-AntonioNeural
-  modelo_llm: claude-sonnet-5-5
+  modelo_llm: auto
 
 temas:
   - nome: Ciência
