@@ -1,0 +1,83 @@
+name: ClipBot
+
+on:
+  schedule:
+    - cron: "0 9 * * *"        # todo dia às 09:00 UTC = 06:00 em Brasília
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Link de um vídeo (vazio = buscar pelos temas)"
+        required: false
+        default: ""
+      idioma:
+        description: "Idioma falado no vídeo do link (pt, en, es)"
+        required: false
+        default: "pt"
+      cortes:
+        description: "Quantos cortes gerar do link"
+        required: false
+        default: "3"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: clipbot
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Instalar ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Instalar dependências
+        run: pip install -r requirements.txt
+
+      - name: Cookies do YouTube (opcional)
+        env:
+          YT_COOKIES: ${{ secrets.YT_COOKIES }}
+        run: |
+          if [ -n "$YT_COOKIES" ]; then printf '%s' "$YT_COOKIES" > cookies.txt; fi
+
+      - name: Rodar ClipBot
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          YT_API_KEY: ${{ secrets.YT_API_KEY }}
+          YT_TOKEN_JSON: ${{ secrets.YT_TOKEN_JSON }}
+          INPUT_URL: ${{ github.event.inputs.url }}
+          INPUT_LANG: ${{ github.event.inputs.idioma }}
+          INPUT_CLIPS: ${{ github.event.inputs.cortes }}
+        run: python clipbot_gh.py
+
+      - name: Salvar estado (vídeos já usados)
+        if: always()
+        run: |
+          git config user.name "clipbot"
+          git config user.email "clipbot@users.noreply.github.com"
+          git add state.json
+          git diff --cached --quiet || (git commit -m "clipbot: estado" && git pull --rebase && git push)
+
+      - name: Guardar vídeos gerados (para TikTok / conferência)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cortes
+          path: |
+            out/*.mp4
+            out/*.txt
+          retention-days: 7
+          if-no-files-found: ignore
+
